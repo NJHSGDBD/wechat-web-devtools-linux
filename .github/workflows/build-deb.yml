@@ -32,27 +32,16 @@ jobs:
           echo "tag result: $tag - $name"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
-      # https://stackoverflow.com/questions/61096521/how-to-use-gpg-key-in-github-actions
-      # gpg --generate-key
-      # gpg --export-secret-keys YOUR_ID_HERE | base64 > private.key
-      - name: Configure GPG Key
-        id: gpg
-        run: |
-          echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --import
-          gpg --list-secret-keys jiyecafe@gmail.com
-          echo "sign=true" >> "$GITHUB_OUTPUT"
-        env:
-          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
 
       - name: Prepare
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential fakeroot devscripts debhelper # debmake lintian pbuilder
+          sudo apt-get install -y build-essential fakeroot devscripts debhelper
 
       - name: Build Deb Package
         env:
           BUILD_VERSION: ${{ steps.tag.outputs.tag }}
-          SIGN_DEB: ${{ steps.gpg.outputs.sign }}
+          SIGN_DEB: false
           WINE: 'false'
         run: |
           mkdir -p tmp/build
