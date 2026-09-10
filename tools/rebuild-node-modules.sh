@@ -186,6 +186,32 @@ echo "npm version:      $(npm --version)"
 python --version
 python3 --version
 
+# ── @swc/core Linux binding 探测 ───────────
+# 新版微信开发者工具内置了 @swc/core(Rust 编写的编译器),其 native binding
+# 通过 optionalDependencies 按平台分发。Windows 版打包时只安装了 win32 的
+# binding 包(@swc/core-win32-*),在 Linux 上运行会于 binding.js 抛出
+# "Failed to load native binding",导致小程序编译链路(AppService)整体失败。
+# 这里探测 app 内置 @swc/core 的版本,后续为其补充对应 Linux 平台的
+# prebuilt binding 包(glibc)。注意 @swc/core 与 binding 包必须严格同版本。
+SWC_VERSION=""
+SWC_BINDING_PKG=""
+swc_core_pkg="${package_dir}/node_modules/@swc/core/package.json"
+if [ -f "$swc_core_pkg" ]; then
+  SWC_VERSION=$(node -p \
+    "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).version" \
+    "$swc_core_pkg")
+  case "$arch" in
+    x64)   SWC_BINDING_PKG="@swc/core-linux-x64-gnu" ;;
+    arm64) SWC_BINDING_PKG="@swc/core-linux-arm64-gnu" ;;
+    *)     notice "当前架构($arch)无 @swc/core 官方 prebuilt,跳过 binding 补充" ;;
+  esac
+  if [ -n "$SWC_BINDING_PKG" ]; then
+    notice "发现 app 内置 @swc/core@${SWC_VERSION},补充 ${SWC_BINDING_PKG} binding"
+  fi
+else
+  notice "未发现 app 内置 @swc/core,跳过 binding 补充"
+fi
+
 # ── Windows 专属模块清理 ──────────────────
 cd "${package_dir}/node_modules"
 rm -fr vscode-windows-ca-certs \
@@ -298,6 +324,33 @@ find . -name "*..mk" -delete
 # ── 将 .node 文件回写到 Electron 应用目录 ───────
 notice "copy node files"
 find . -name "*.node" | xargs -I{} cp -rf {} "${package_dir}/node_modules/{}"
+
+# ── @swc/core Linux binding 下载与回写 ─────
+# 直接下载 tarball 解压,绕过 npm 的 EBADPLATFORM 平台检查
+# (交叉编译 arm64 时宿主为 x86_64)。tarball 缓存于 cache/ 目录,支持续传。
+# 安装完成后 .node 文件会被 asar-helper.sh 的 "**/*.node" 规则 unpack 到
+# app.asar.unpacked,Electron 即可正常加载该 native binding。
+if [ -n "$SWC_BINDING_PKG" ]; then
+  swc_pkg_basename="${SWC_BINDING_PKG#@swc/}"
+  swc_tarball="${swc_pkg_basename}-${SWC_VERSION}.tgz"
+  swc_tarball_path="$root_dir/cache/${swc_tarball}"
+  swc_extract_dir="$root_dir/cache/${swc_pkg_basename}-${SWC_VERSION}"
+  swc_url="https://registry.npmmirror.com/${SWC_BINDING_PKG}/-/${swc_tarball}"
+
+  mkdir -p "$root_dir/cache"
+  if [ ! -f "$swc_tarball_path" ]; then
+    wget -c "$swc_url" -O "${swc_tarball_path}.tmp"
+    mv "${swc_tarball_path}.tmp" "$swc_tarball_path"
+  fi
+  rm -rf "$swc_extract_dir"
+  mkdir -p "$swc_extract_dir"
+  tar xzf "$swc_tarball_path" -C "$swc_extract_dir"
+
+  # 清理 Windows 平台的 binding 包,避免混淆与冗余体积
+  rm -rf "${package_dir}/node_modules/@swc/core-win32-"*
+  notice "copy ${SWC_BINDING_PKG}@${SWC_VERSION} to node_modules"
+  cp -rf "$swc_extract_dir/package" "${package_dir}/node_modules/@swc/${swc_pkg_basename}"
+fi
 
 rm -rf "${package_dir}/node_modules_tmp"
 
