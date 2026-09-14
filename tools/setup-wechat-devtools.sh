@@ -143,6 +143,9 @@ if [ $CURRENT_STEP == $INSTALL_REBUILD_SUCCESS ];then
   notice "Patching Other"
   "$root_dir/tools/fix-other.sh" $@
 
+  notice "Patching login-state persistence"
+  "$root_dir/tools/fix-login-persist.sh"
+
   # notice "Replace Skyline"
   # "$root_dir/tools/replace-skyline.sh"
 fi
