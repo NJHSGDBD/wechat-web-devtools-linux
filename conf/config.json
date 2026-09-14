@@ -3,7 +3,7 @@
         "urls": {
             "x64": {
                 "version": "36.6.0",
-                "template": "https://github.com/electron/electron/releases/download/v${version}/electron-v${version}-linux-x64.zip"
+                "template": "https://npmmirror.com/mirrors/electron/v${version}/electron-v${version}-linux-x64.zip"
             }
         }
     },

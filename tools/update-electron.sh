@@ -7,11 +7,24 @@ set -ex
 # 从js获取配置
 electron_url=$(node "$root_dir/tools/parse-config.js" --get-electron-url $@)
 file_name=$(basename "$electron_url")
+# 备用源:github releases(与 npmmirror 文件一致,互为兜底,避免单点网络 504)
+secondary_url=$(echo "$electron_url" | sed 's#https://npmmirror.com/mirrors/electron/v#https://github.com/electron/electron/releases/download/v#')
 # download
 local_path="$root_dir/cache/$file_name"
 if [ ! -f "$local_path" ]; then
-    wget -c -O "$local_path.tmp" "$electron_url"
-    mv "$local_path.tmp" "$local_path"
+    for url in "$electron_url" "$secondary_url"; do
+        echo "[update-electron] downloading $url"
+        if wget -c -T 120 --tries=5 -O "$local_path.tmp" "$url"; then
+            mv "$local_path.tmp" "$local_path"
+            break
+        fi
+        echo "[update-electron] download failed, trying next source"
+        rm -f "$local_path.tmp"
+    done
+    if [ ! -f "$local_path" ]; then
+        echo "[update-electron] all download sources failed" >&2
+        exit 1
+    fi
 fi
 # extract
 rm -rf "$root_dir/electron"
