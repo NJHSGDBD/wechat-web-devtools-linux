@@ -35,6 +35,14 @@ done
 export npm_config_prefix="${npm_config_prefix:-$root_dir/cache/npm/node_global}"
 export npm_config_cache="${npm_config_cache:-$root_dir/cache/npm/node_cache}"
 export PATH="$npm_config_prefix/bin:$PATH"
+
+# 代理跟随环境变量，不硬编码：GitHub Release / registry 需要代理时，
+# 由调用方 export https_proxy=http://host:port 即可，wget/curl 原生读取同一变量。
+if [ -n "${https_proxy:-}" ]; then
+  export npm_config_https_proxy="$https_proxy"
+  export npm_config_proxy="${http_proxy:-$https_proxy}"
+  notice "检测到代理: $https_proxy（已透传给 npm）"
+fi
 notice "使用环境 Node.js: $(command -v node)"
 node --version
 npm --version
